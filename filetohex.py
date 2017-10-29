@@ -1,4 +1,4 @@
-# python filetohex.py  <input_file> output_file
+# python filetohex.py  <input_file> output_
 
 import numpy as np
 import sys
