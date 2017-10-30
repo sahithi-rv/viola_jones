@@ -3,7 +3,7 @@ import BRAM::*;
 import constants::*;
 import Vector :: * ;
 
-function BRAMRequest#(Bit#(32), Bit#(32)) makeRequest(Bool write, Bit#(32) addr, Bit#(32) data);
+function BRAMRequest#(Bit#(16), Bit#(16)) makeRequest(Bool write, Bit#(16) addr, Bit#(16) data);
 	return BRAMRequest{
 		write: write,
 		responseOnWrite:False,
@@ -19,12 +19,12 @@ Sizet init_time = fromInteger(valueof(INIT_TIME));
 Sizet wt = fromInteger(valueof(WT));
 (*synthesize*)
 module mkVJmain(Empty);
-	Reg#(Int#(32)) clk <- mkReg(0);
-	Reg#(Int#(32)) wait_time <- mkReg(0);
-	Reg#(Int#(32)) dont_wait <- mkReg(0);
+	Reg#(Int#(16)) clk <- mkReg(0);
+	Reg#(Int#(16)) wait_time <- mkReg(0);
+	Reg#(Int#(16)) dont_wait <- mkReg(0);
 
-	Reg#(Int#(32)) row <- mkReg(0);
-	Reg#(Int#(32)) col <- mkReg(0);
+	Reg#(Int#(16)) row <- mkReg(0);
+	Reg#(Int#(16)) col <- mkReg(0);
 
 	BRAM_Configure cfg_ii = defaultValue;
 	cfg_ii.memorySize = 5*5;
@@ -137,7 +137,7 @@ module mkVJmain(Empty);
 		begin
 			for(Sizet j = 0;j<3;j = j+1)
 			begin
-				Bit#(32) a = wbuffer[i][j];
+				Bit#(16) a = wbuffer[i][j];
 				let b = unpack(a);
 				$write("%d ", b);
 			end
