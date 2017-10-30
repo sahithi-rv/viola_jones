@@ -6,6 +6,8 @@ typedef 3 WSZ;
 typedef 1 L;
 typedef TAdd#(TMul#(TSub#(WSZ,1),IMGC),WSZ) INIT_TIME;
 typedef TAdd#(L,2) WT;
+typedef 2913 HF;
+typedef 25 STAGES;
 
 typedef Int#(16) Sizet;
 typedef Bit#(16) Pixels;
