@@ -15,10 +15,13 @@ endfunction
 Sizet r = fromInteger(valueof(IMGR));
 Sizet c = fromInteger(valueof(IMGC));
 Sizet sz = fromInteger(valueof(WSZ));
+Sizet init_time = fromInteger(valueof(INIT_TIME));
+Sizet wt = fromInteger(valueof(WT));
 (*synthesize*)
 module mkVJmain(Empty);
 	Reg#(Int#(32)) clk <- mkReg(0);
-	Reg#(Int#(32)) cnt <- mkReg(0);
+	Reg#(Int#(32)) wait_time <- mkReg(0);
+	Reg#(Int#(32)) dont_wait <- mkReg(0);
 
 	Reg#(Int#(32)) row <- mkReg(0);
 	Reg#(Int#(32)) col <- mkReg(0);
@@ -36,26 +39,30 @@ module mkVJmain(Empty);
 
 	Vector#(WSZ,  Reg#(Pixels)) tempRegs <- replicateM(mkReg(0));
 
-/*	rule clock;
-		clk <= clk + 1;
-	endrule
-	rule first (clk < 25);
-		let t1 = pack(clk);
-		ii.portA.request.put(makeRequest(False,t1, 0 ));
-	endrule
-
-	rule second( clk >= 1 && clk<=25);
-		let t1 <- ii.portA.response.get;
-		let t2 = unpack(t1);
-		$display("%d", t2);
-	endrule
-*/
-
 
 	rule update_clk;
 		clk <= clk + 1;
-		
-		
+
+		if( clk<init_time )
+		begin 
+			dont_wait <= 1;
+		end
+		else
+		begin
+			dont_wait <= 0;
+			if( wait_time == (wt-1) )
+			begin
+				wait_time <= 0;
+			end
+			else
+			begin
+				wait_time <= wait_time + 1;
+			end
+		end
+
+	endrule
+
+	rule shift_lbuffer(wait_time == 0 || (dont_wait == 1) ); // read values of column in line buffers
 		if( col == (c-1) )
 		begin
 			col <= 0;
@@ -65,12 +72,7 @@ module mkVJmain(Empty);
 		begin 
 			col <= col + 1;
 		end
-		//$display("%d %d", row_pos, col_pos);
-	
-	endrule
 
-	rule shift_lbuffer(clk < 25); // read values of column in line buffers
-		
 		BitSz a = pack(c*row + col);
 		let b = unpack(a);
 		$display("pos %d", b);
@@ -82,8 +84,9 @@ module mkVJmain(Empty);
 		end
 	endrule
 
-	rule update_lbuffer( clk>=1 && clk<= 25 );	// shifted values are written to all rows;
-		BitSz cl = pack(col);
+	rule update_lbuffer( (wait_time == 1) || (dont_wait == 1) );	// shifted values are written to all rows;
+		let tmp = (col-1+c)%c;
+		BitSz cl = pack(tmp);
 		for(Sizet i = 0; i < (sz-1); i = i+1) // wrt to lbuffer
 		begin 
 			
@@ -91,12 +94,14 @@ module mkVJmain(Empty);
 
 			lbuffer[i].portB.request.put(makeRequest(True, cl, t1));
 			tempRegs[i] <= t1;
+			let lol  = unpack(t1);
+	//		$display("lol %d",lol);
 		end
 		let a <- ii.portA.response.get;
 		lbuffer[sz-1].portB.request.put(makeRequest(True, cl, a));
 		tempRegs[sz-1] <= a;
 		let b = unpack(a);
-		//$display("lol %d",b);
+	//	$display("lol %d",b);
 
 		for(int i  =0;i<3;i = i+1)
 		begin
@@ -105,12 +110,12 @@ module mkVJmain(Empty);
 		//	$write("%d ", y);
 		end
 
-		//$display("\n");
+	//	$display("");
 		
 		
 	endrule
 
-	rule shift_wbuffer(clk>=2 && clk <= 26);
+	rule shift_wbuffer ((wait_time == 1) || (dont_wait == 1));
 		for(Sizet i = 0; i < (sz); i = i+1) // wrt to wbuffer
 		begin 
 			for(Sizet j = 0; j<(sz-1);j = j+1)
@@ -121,7 +126,7 @@ module mkVJmain(Empty);
 
 		for(Sizet i = 0;i<sz;i = i+1)
 		begin
-		//	wbuffer[i][sz-1] <= lbuffer[i].portA.response.get
+		
 			wbuffer[i][sz-1] <= tempRegs[i];
 		end
 	endrule
@@ -142,7 +147,7 @@ module mkVJmain(Empty);
 		$display("\n");
 	endrule
 
-	rule done(clk>26);
+	rule done(clk>52);
 		$finish(0);
 	endrule
 
