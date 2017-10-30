@@ -7,8 +7,8 @@ typedef 1 L;
 typedef TAdd#(TMul#(TSub#(WSZ,1),IMGC),WSZ) INIT_TIME;
 typedef TAdd#(L,2) WT;
 
-typedef Int#(32) Sizet;
-typedef Bit#(32) Pixels;
-typedef Bit#(32) BitSz;
+typedef Int#(16) Sizet;
+typedef Bit#(16) Pixels;
+typedef Bit#(16) BitSz;
 
 endpackage
