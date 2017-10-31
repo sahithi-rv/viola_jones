@@ -32,10 +32,10 @@ vj_fsm:
 
 # Clean all intermediate files
 clean:
-	rm -f  *~  *.bi  *.bo  *.ba  *.h  *.cxx  *.o
+	rm -f  *~  *.bi  *.bo  *.ba  *.h  *.cxx  *.o *.v 
 
 # Clean all intermediate files, plus Verilog files, executables, schedule outputs
 fullclean:
-	rm -f  *~  *.bi  *.bo  *.ba  *.h  *.cxx  *.o
+	rm -f  *~  *.bi  *.bo  *.ba  *.h  *.cxx  *.o *.bsim
 	rm -f  *.exe   *.so  *.sched  *.v  *.vcd
 
