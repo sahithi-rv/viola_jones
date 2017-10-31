@@ -40,6 +40,7 @@ module mkVJfsm(Empty);
 	Reg#(Bool) wbuffer_enable <- mkReg(False);
 	Reg#(Bool) lbuffer_enable <- mkReg(False);
 	Reg#(Bool) ii_enable <- mkReg(False);
+	Reg#(Bool) enable_print <- mkReg(False);
 
 	Reg#(Bool) cascade_enable <- mkReg(False);
 
@@ -48,9 +49,9 @@ module mkVJfsm(Empty);
 
 	Reg#(Bool) buffer_enable <- mkReg(True);
 	Reg#(Bool) sd_enable <- mkReg(False);
-	Reg#(Bool) readData_enable <- mkReg(False);
+	Reg#(Bool) getclassifier_enable <- mkReg(False);
 	Reg#(Bool) classifier_enable <- mkReg(True);
-	Reg#(Bool) updateCl_enable <- mkReg(False);
+	Reg#(Bool) compute_enable <- mkReg(False);
 	Reg#(Bool) upd_stage_enable <- mkReg(False);
 
 	Reg#(Pixels) stage_sum <- mkReg(0);
@@ -62,7 +63,7 @@ module mkVJfsm(Empty);
 
 	BRAM_Configure cfg_ii = defaultValue;
 	cfg_ii.memorySize = valueof(IMGR)*valueof(IMGC);
-	cfg_ii.loadFormat = tagged Binary "../mem_files/oldfaces_320_240.mem";
+	cfg_ii.loadFormat = tagged Binary "../mem_files/temp.mem";
 
 	BRAM2Port#(BitSz_20, Pixels) ii <- mkBRAM2Server(cfg_ii);
 	BRAM_Configure cfg_lbuffer = defaultValue;
@@ -240,110 +241,98 @@ module mkVJfsm(Empty);
 		clk <= clk + 1;
 	endrule
 
-	rule state_S0 ((curr_state == 0)&&(buffer_enable));
+	rule state_S0 (curr_state == 0);
+		$display("s0 %d", clk);
     	curr_state <= 1;
    		ii_enable<=True;
+   		lbuffer_enable<=False;
+   		wbuffer_enable<=False;
    	endrule
      
    	rule state_S1 (curr_state == 1);
     	curr_state <= 2;
-      	lbuffer_enable<=True;
+    			$display("s1 %d", clk);
+
+   		ii_enable<=False;
+   		lbuffer_enable<=True;
+   		wbuffer_enable<=False;
    	endrule
     
    	rule state_S2 (curr_state == 2); 
+      			$display("s2 %d", clk);
+
       	curr_state <= 3;
-		wbuffer_enable<=True;
+   		ii_enable<=False;
+   		lbuffer_enable<=False;
+   		wbuffer_enable<=True;
    	endrule
 
-   	rule state_S3 (curr_state == 3 && (clk>init_time ) );
+   	rule state_S3 (curr_state == 3  );
+   			$display("s3 %d", clk);
+   		ii_enable<=False;
+   		lbuffer_enable<=False;
+   		wbuffer_enable<=False;
+   		if(clk>=init_time)
+   		begin
    		curr_state <= 4;
-   		buffer_enable <= False;
-   		ii_enable <= False;
-   		lbuffer_enable <= False;
-   		wbuffer_enable <= False;
-   		cascade_enable <= True;
+   		end
+   		else
+   		begin
+   		curr_state<=0;
+   		end
    	endrule
 
-   	rule state_S4 (curr_state == 4 && (cascade_enable && wc_counter < n_wc) );
-   		curr_state <= 5;
-   		sd_enable <= True;
+   	rule state_S4 (curr_state==4);
+   		//enable_print<=True;
+   		classifier_enable<=True;
+   		getclassifier_enable<=False;	
+		ii_enable<=False;
+   		lbuffer_enable<=False;
+   		wbuffer_enable<=False;
+   		compute_enable<=False;
+   		updateCl_enable<=False;
+
+   		curr_state<=5;
    	endrule
 
-   	rule state_S5 (curr_state == 5 );
-   		curr_state <= 6;
-   		readData_enable <= True;
+   	rule state_S5 (curr_state==5);
+   		classifier_enable<=False;
+   		getclassifier_enable<=True;
+		ii_enable<=False;
+   		lbuffer_enable<=False;
+   		wbuffer_enable<=False;
+   		compute_enable<=False;
+   		updateCl_enable<=False;
+
+   		curr_state<=6;	
    	endrule
 
-   	rule state_S6 (curr_state == 6);
-   		curr_state <= 7;
-   		classifier_enable <= True;
+   	rule state_S6(curr_state==6);
+   		classifier_enable<=False;
+   		getclassifier_enable<=False;
+		ii_enable<=False;
+   		lbuffer_enable<=False;
+   		wbuffer_enable<=False;
+   		compute_enable<=True;
+   		updateCl_enable<=False;
+
+   		curr_state<=7;	
    	endrule
 
-   	rule state_S7 (curr_state == 7 );
-   		curr_state <= 8;
-   		updateCl_enable <= True;
+   	rule state_S7(curr_state==7);
+   		classifier_enable<=False;
+   		getclassifier_enable<=False;
+		ii_enable<=False;
+   		lbuffer_enable<=False;
+   		wbuffer_enable<=False;
+   		compute_enable<=False;
+   		updateCl_enable<=True;
+   		curr_state<=7;	
    	endrule
 
-   	rule state_S8 (curr_state == 8);
-
-   		if( wc_counter == (n_wc-1) )
-		begin
-			curr_state <= 9;
-			cascade_enable <= False;
-			sd_enable <= False;
-			readData_enable <= False;
-			classifier_enable <= False;
-			updateCl_enable <= False;
-		end
-		else
-		begin 
-			curr_state <= 4;
-			wc_counter<=wc_counter+1;
-		end
-   	endrule
-
-	rule state_S9 (curr_state == 9);
-		//upd_stage_enable <=True;
-		//cascade_enable<=False;
-
-		if(stage_sum>stage_thresh[cur_stage]) //continue
-		begin
-
-			if( cur_stage == (n_stages-1) )
-			begin
-				cascade_enable <=False;
-				buffer_enable <=True;
-				wc_counter<=0;
-				n_wc<=stages_array[0];
-				stage_sum<=0;
-				cur_stage<=0;
-				$display("window at: %d %d",row,col);
-				curr_state <= 0;
-			end
-			else
-			begin
-				cur_stage<=cur_stage+1;
-				n_wc<=stages_array[cur_stage+1];
-				wc_counter<=0;
-				stage_sum<=0;
-				curr_state <= 4;
-				cascade_enable <= True;
-			end
-		end
-		else
-		begin 
-			cascade_enable <=False;
-			buffer_enable <= True;
-			wc_counter<=0;
-			stage_sum<=0;
-			cur_stage<=0;
-			n_wc<=stages_array[0];
-			curr_state <= 0;
-		end
-	endrule
-
-	rule request_ii(ii_enable && (buffer_enable)); // read values of column in line buffers
-	//	$display("ii %d", clk);
+	
+	rule request_ii(ii_enable); // read values of column in line buffers
+		$display("ii %d col %d row %d ", clk,col,row);
 		if( col == (c-1) )
 		begin
 			col <= 0;
@@ -356,7 +345,7 @@ module mkVJfsm(Empty);
 
 		BitSz_20 a = pack(c*row + col);
 		let b = unpack(a);
-		//$display("pos %d", b);
+		$display("pos %d", b);
 		ii.portA.request.put(makeRequest20(False,a, 0 ));
 		for(Sizet_20 i = 1; i < (sz); i = i+1) // wrt to lbuffer
 		begin 
@@ -365,9 +354,11 @@ module mkVJfsm(Empty);
 		end
 	endrule
 
-	rule update_lbuffer(lbuffer_enable && (buffer_enable));
-	//	$display("lbuffer %d", clk);
+	rule update_lbuffer(lbuffer_enable );
+//		$display("lbuffer %d", clk);
 		let tmp = (col-1+c)%c;
+		$display("lbuffer clk%d tmp%d",clk, tmp);
+
 		BitSz_20 cl = pack(tmp);
 		for(Sizet_20 i = 0; i < (sz-1); i = i+1) // wrt to lbuffer
 		begin 
@@ -381,8 +372,8 @@ module mkVJfsm(Empty);
 		let b = unpack(a);		
 	endrule
 
-	rule shift_wbuffer (wbuffer_enable && (buffer_enable));
-	//	$display("wbuffer %d", clk);
+	rule shift_wbuffer (wbuffer_enable);
+		$display("wbuffer clk %d", clk);
 		for(Sizet_20 i = 0; i < (sz); i = i+1) // wrt to wbuffer
 		begin 
 			for(Sizet_20 j = 0; j<(sz-1);j = j+1)
@@ -398,7 +389,8 @@ module mkVJfsm(Empty);
 		end
 	endrule
 
-	rule loadclassifiers (sd_enable && (cascade_enable) );
+
+	rule loadclassifiers (classifier_enable);
 		let a=pack(r_index);
 		weights_array0.portA.request.put(makeRequest(False, a, 0));
 		weights_array1.portA.request.put(makeRequest(False, a, 0));
@@ -419,8 +411,9 @@ module mkVJfsm(Empty);
 		alpha2.portA.request.put(makeRequest(False, a, 0));
 		tree_thresh_array.portA.request.put(makeRequest(False, a, 0));
 	endrule
-	   
-	rule getclassifiers( readData_enable && (cascade_enable) );
+	
+
+	rule getclassifiers (getclassifier_enable);
 		
 		let a1<- weights_array0.portA.response.get;
 		reg_weights[0]<=a1;
@@ -460,7 +453,7 @@ module mkVJfsm(Empty);
 		tree_thresh <=a18;
 	endrule	
 
-	rule wc_compute( classifier_enable && (cascade_enable) );
+rule wc_compute(compute_enable);
 		 let x1=reg_rectangle[0];
 		 let y1=reg_rectangle[1];
 		 let w1=reg_rectangle[2];
@@ -487,11 +480,25 @@ module mkVJfsm(Empty);
 			end
 	endrule
 
-	rule update_classifier(updateCl_enable && (cascade_enable) );
+
+	rule update_classifier(updateCl_enable );
+		
 		r_index<=r_index+1;
+
+		if( wc_counter == (n_wc-1) )
+		begin
+			stage_enable <=True;
+			classifier_enable<=False;
+			wc_counter<=0;
+		end
+		else
+		begin 
+			wc_counter<=wc_counter+1;
+			stage_enable <=False;
+		end
 	endrule
 
-/*	rule print;
+	rule print(enable_print);
 		for(Sizet i = 0;i<3;i = i+1)
 		begin
 			for(Sizet j = 0;j<3;j = j+1)
@@ -505,8 +512,8 @@ module mkVJfsm(Empty);
 
 		$display("\n");
 	endrule
-*/
-	rule done(row == r );
+
+	rule done(clk>=100 );
 		$finish(0);
 	endrule
 
