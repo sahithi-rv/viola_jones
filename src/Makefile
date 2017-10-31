@@ -18,6 +18,12 @@ vj_main:
 	bsc -verilog -u vj_main.bsv +RTS -K0.1G -RTS
 	@echo "Generting the simulation object"
 	bsc -verilog -e mkVJmain -o vj_main.bsim +RTS -k0.1G -RTS
+
+vj_fsm: 
+	@echo "Compiling into verilog files"
+	bsc -verilog -u vj_fsm.bsv +RTS -K0.1G -RTS
+	@echo "Generting the simulation object"
+	bsc -verilog -e mkVJfsm -o vj_fsm.bsim +RTS -k0.1G -RTS
 	
 
 # -----------------------------------------------------------------

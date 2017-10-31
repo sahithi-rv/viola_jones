@@ -1,7 +1,9 @@
-package vj_main;
+package vj_fsm;
 import BRAM::*;
 import constants::*;
 import Vector :: * ;
+import StmtFSM :: *;
+
 
 function BRAMRequest#(Bit#(16), Bit#(16)) makeRequest(Bool write, Bit#(16) addr, Bit#(16) data);
 	return BRAMRequest{
@@ -12,19 +14,44 @@ function BRAMRequest#(Bit#(16), Bit#(16)) makeRequest(Bool write, Bit#(16) addr,
 		};
 endfunction
 
-Sizet r = fromInteger(valueof(IMGR));
-Sizet c = fromInteger(valueof(IMGC));
-Sizet sz = fromInteger(valueof(WSZ));
+function BRAMRequest#(Bit#(20), Bit#(16)) makeRequest20(Bool write, Bit#(20) addr, Bit#(16) data);
+	return BRAMRequest{
+		write: write,
+		responseOnWrite:False,
+		address: addr,
+		datain: data
+		};
+endfunction
+
+Sizet_20 r = fromInteger(valueof(IMGR));
+Sizet_20 c = fromInteger(valueof(IMGC));
+Sizet_20 sz = fromInteger(valueof(WSZ));
 Sizet init_time = fromInteger(valueof(INIT_TIME));
 Sizet wt = fromInteger(valueof(WT));
 Sizet n_stages=fromInteger(valueof(STAGES));
 
 Integer hf = valueof(HF);
 (*synthesize*)
-module mkVJmain(Empty);
+module mkVJfsm(Empty);
 	Reg#(Int#(16)) clk <- mkReg(0);
-	Reg#(Int#(16)) wait_time <- mkReg(0);
-	Reg#(Int#(16)) dont_wait <- mkReg(0);
+
+	Reg#(Sizet_20) row <- mkReg(0);
+	Reg#(Sizet_20) col <- mkReg(0);
+	Reg#(Bool) wbuffer_enable <- mkReg(False);
+	Reg#(Bool) lbuffer_enable <- mkReg(False);
+	Reg#(Bool) ii_enable <- mkReg(False);
+
+	Reg#(Bool) cascade_enable <- mkReg(False);
+
+	Reg#(Bool) init <- mkReg(True);
+
+
+	Reg#(Bool) buffer_enable <- mkReg(True);
+	Reg#(Bool) sd_enable <- mkReg(False);
+	Reg#(Bool) readData_enable <- mkReg(False);
+	Reg#(Bool) classifier_enable <- mkReg(True);
+	Reg#(Bool) updateCl_enable <- mkReg(False);
+	Reg#(Bool) upd_stage_enable <- mkReg(False);
 
 	Reg#(Pixels) stage_sum <- mkReg(0);
 	Reg#(Int#(16)) classifier_sum <- mkReg(0);
@@ -32,27 +59,16 @@ module mkVJmain(Empty);
 	Reg#(Int#(16)) cur_stage <- mkReg(0);
 	Reg#(Pixels) n_wc <- mkReg(0);
 	Reg#(Pixels) wc_counter <- mkReg(0);
-	Reg#(Bool) buffer_enable <- mkReg(True);
-	Reg#(Bool) lbuffer_enable <- mkReg(False);
-	Reg#(Bool) enable_enable <- mkReg(False);
-	Reg#(Bool) wbuffer_enable <- mkReg(False);
-	Reg#(Bool) classifier_enable <- mkReg(False);
-	Reg#(Bool) stage_enable <- mkReg(False);
-
-	Reg#(Int#(16)) row <- mkReg(0);
-	Reg#(Int#(16)) col <- mkReg(0);
-
-	Reg#(Bool) init <- mkReg(True);
 
 	BRAM_Configure cfg_ii = defaultValue;
-	cfg_ii.memorySize = 5*5;
-	cfg_ii.loadFormat = tagged Binary "../mem_files/temp.mem";
+	cfg_ii.memorySize = valueof(IMGR)*valueof(IMGC);
+	cfg_ii.loadFormat = tagged Binary "../mem_files/oldfaces_320_240.mem";
 
-	BRAM2Port#(BitSz, Pixels) ii <- mkBRAM2Server(cfg_ii);
+	BRAM2Port#(BitSz_20, Pixels) ii <- mkBRAM2Server(cfg_ii);
 	BRAM_Configure cfg_lbuffer = defaultValue;
-	cfg_lbuffer.memorySize = 5;
+	cfg_lbuffer.memorySize = valueof(IMGC);
 
-	Vector#(WSZ,  BRAM2Port#(BitSz, Pixels) ) lbuffer <- replicateM(mkBRAM2Server(cfg_lbuffer)) ; // size = 20*240
+	Vector#(WSZ,  BRAM2Port#(BitSz_20, Pixels) ) lbuffer <- replicateM(mkBRAM2Server(cfg_lbuffer)) ; // size = 20*240
 	Vector#(WSZ, Vector#(WSZ, Reg#(Pixels) )) wbuffer <- replicateM(replicateM(mkReg(0))); // size = 20*20
 	Vector#(WSZ,  Reg#(Pixels)) tempRegs <- replicateM(mkReg(0));
 	Vector#( STAGES, Reg#(Pixels)) stages_array <- replicateM(mkReg(0));
@@ -63,8 +79,14 @@ module mkVJmain(Empty);
 	Vector#( 2, Reg#(Pixels)) reg_alpha  <- replicateM(mkReg(0));
 	Reg#(Pixels) tree_thresh <- mkReg(0);
 
+	Reg#(Sizet) iter1 <- mkReg(0);
+	Reg#(Sizet) iter2 <- mkReg(0);
+	Reg#(Sizet) iter3 <- mkReg(0);
+	Reg#(Sizet) iter4 <- mkReg(0);
+	Reg#(Sizet) iter5 <- mkReg(0);
+	Reg#(Sizet) curr_state <- mkReg(0);
 
-	// initialize registers
+		// initialize registers
 
 	rule init_regs(init);
 		stages_array[0] <= 9;
@@ -213,47 +235,115 @@ module mkVJmain(Empty);
 	cfg_rectangles11.loadFormat = tagged Binary "../mem_files/rectangles_array11.txt.mem";
 	BRAM2Port#(BitSz, Pixels) rectangles11 <- mkBRAM2Server(cfg_rectangles11);
 
-	rule update_clk(!init);
-		clk <= clk + 1;
 
-/*		if( clk<init_time )
-		begin 
-			dont_wait <= 1;
+	rule update_clk;
+		clk <= clk + 1;
+	endrule
+
+	rule state_S0 ((curr_state == 0)&&(buffer_enable));
+    	curr_state <= 1;
+   		ii_enable<=True;
+   	endrule
+     
+   	rule state_S1 (curr_state == 1);
+    	curr_state <= 2;
+      	lbuffer_enable<=True;
+   	endrule
+    
+   	rule state_S2 (curr_state == 2); 
+      	curr_state <= 3;
+		wbuffer_enable<=True;
+   	endrule
+
+   	rule state_S3 (curr_state == 3 && (clk>init_time ) );
+   		curr_state <= 4;
+   		buffer_enable <= False;
+   		ii_enable <= False;
+   		lbuffer_enable <= False;
+   		wbuffer_enable <= False;
+   		cascade_enable <= True;
+   	endrule
+
+   	rule state_S4 (curr_state == 4 && (cascade_enable && wc_counter < n_wc) );
+   		curr_state <= 5;
+   		sd_enable <= True;
+   	endrule
+
+   	rule state_S5 (curr_state == 5 );
+   		curr_state <= 6;
+   		readData_enable <= True;
+   	endrule
+
+   	rule state_S6 (curr_state == 6);
+   		curr_state <= 7;
+   		classifier_enable <= True;
+   	endrule
+
+   	rule state_S7 (curr_state == 7 );
+   		curr_state <= 8;
+   		updateCl_enable <= True;
+   	endrule
+
+   	rule state_S8 (curr_state == 8);
+
+   		if( wc_counter == (n_wc-1) )
+		begin
+			curr_state <= 9;
+			cascade_enable <= False;
+			sd_enable <= False;
+			readData_enable <= False;
+			classifier_enable <= False;
+			updateCl_enable <= False;
 		end
 		else
+		begin 
+			curr_state <= 4;
+			wc_counter<=wc_counter+1;
+		end
+   	endrule
+
+	rule state_S9 (curr_state == 9);
+		//upd_stage_enable <=True;
+		//cascade_enable<=False;
+
+		if(stage_sum>stage_thresh[cur_stage]) //continue
 		begin
 
-			dont_wait <= 0;
-			if( wait_time == (wt-1) )
+			if( cur_stage == (n_stages-1) )
 			begin
-				wait_time <= 0;
+				cascade_enable <=False;
+				buffer_enable <=True;
+				wc_counter<=0;
+				n_wc<=stages_array[0];
+				stage_sum<=0;
+				cur_stage<=0;
+				$display("window at: %d %d",row,col);
+				curr_state <= 0;
 			end
 			else
 			begin
-				wait_time <= wait_time + 1;
+				cur_stage<=cur_stage+1;
+				n_wc<=stages_array[cur_stage+1];
+				wc_counter<=0;
+				stage_sum<=0;
+				curr_state <= 4;
+				cascade_enable <= True;
 			end
-		end */
-/*		if(clk>=(init_time+2)&&(buffer_enable==3))
-		begin
-			buffer_enable<=False;
-			classifier_enable<=True;
+		end
+		else
+		begin 
+			cascade_enable <=False;
+			buffer_enable <= True;
+			wc_counter<=0;
+			stage_sum<=0;
+			cur_stage<=0;
 			n_wc<=stages_array[0];
-		end*/
-
+			curr_state <= 0;
+		end
 	endrule
 
-	rule enable_buffers(clk>=(init_time+2)&&(enable_enable)&&!(stage_enable||classifier_enable));		
-			buffer_enable<=False;
-			lbuffer_enable<=False;
-			wbuffer_enable<=False;
-			enable_enable <= False;			
-			classifier_enable<=True;
-			n_wc<=stages_array[0];
-		
-	endrule
-
-
-	rule request_ii((buffer_enable) &&(!init)&&!(stage_enable||classifier_enable||enable_enable)); // read values of column in line buffers
+	rule request_ii(ii_enable && (buffer_enable)); // read values of column in line buffers
+	//	$display("ii %d", clk);
 		if( col == (c-1) )
 		begin
 			col <= 0;
@@ -264,52 +354,51 @@ module mkVJmain(Empty);
 			col <= col + 1;
 		end
 
-		BitSz a = pack(c*row + col);
+		BitSz_20 a = pack(c*row + col);
 		let b = unpack(a);
-		$display("pos %d", b);
-		ii.portA.request.put(makeRequest(False,a, 0 ));
-		for(Sizet i = 1; i < (sz); i = i+1) // wrt to lbuffer
+		//$display("pos %d", b);
+		ii.portA.request.put(makeRequest20(False,a, 0 ));
+		for(Sizet_20 i = 1; i < (sz); i = i+1) // wrt to lbuffer
 		begin 
-			BitSz cl = pack(col); 
-			lbuffer[i].portA.request.put(makeRequest(False, cl, 0));
+			BitSz_20 cl = pack(col); 
+			lbuffer[i].portA.request.put(makeRequest20(False, cl, 0));
 		end
-		lbuffer_enable<=True;
 	endrule
 
-	rule update_lbuffer( lbuffer_enable &&(!init)&&!(stage_enable||classifier_enable) );	// shifted values are written to all rows;
+	rule update_lbuffer(lbuffer_enable && (buffer_enable));
+	//	$display("lbuffer %d", clk);
 		let tmp = (col-1+c)%c;
-		BitSz cl = pack(tmp);
-		for(Sizet i = 0; i < (sz-1); i = i+1) // wrt to lbuffer
+		BitSz_20 cl = pack(tmp);
+		for(Sizet_20 i = 0; i < (sz-1); i = i+1) // wrt to lbuffer
 		begin 
 			let t1 <- lbuffer[i+1].portA.response.get;
-			lbuffer[i].portB.request.put(makeRequest(True, cl, t1));
+			lbuffer[i].portB.request.put(makeRequest20(True, cl, t1));
 			tempRegs[i] <= t1;
 		end
 		let a <- ii.portA.response.get;
-		lbuffer[sz-1].portB.request.put(makeRequest(True, cl, a));
+		lbuffer[sz-1].portB.request.put(makeRequest20(True, cl, a));
 		tempRegs[sz-1] <= a;
 		let b = unpack(a);		
-		wbuffer_enable<=True;
 	endrule
 
-	rule shift_wbuffer (wbuffer_enable&&(!init)&&!(stage_enable||classifier_enable||enable_enable) );
-		for(Sizet i = 0; i < (sz); i = i+1) // wrt to wbuffer
+	rule shift_wbuffer (wbuffer_enable && (buffer_enable));
+	//	$display("wbuffer %d", clk);
+		for(Sizet_20 i = 0; i < (sz); i = i+1) // wrt to wbuffer
 		begin 
-			for(Sizet j = 0; j<(sz-1);j = j+1)
+			for(Sizet_20 j = 0; j<(sz-1);j = j+1)
 			begin
 				wbuffer[i][j] <= wbuffer[i][j+1];
 			end
 		end
 
-		for(Sizet i = 0;i<sz;i = i+1)
+		for(Sizet_20 i = 0;i<sz;i = i+1)
 		begin
 		
 			wbuffer[i][sz-1] <= tempRegs[i];
 		end
-		enable_enable <= True;
 	endrule
 
-	rule loadclassifiers (classifier_enable&& wc_counter<n_wc &&(!init)&& !(lbuffer_enable||wbuffer_enable||buffer_enable ||stage_enable||enable_enable));
+	rule loadclassifiers (sd_enable && (cascade_enable) );
 		let a=pack(r_index);
 		weights_array0.portA.request.put(makeRequest(False, a, 0));
 		weights_array1.portA.request.put(makeRequest(False, a, 0));
@@ -331,7 +420,7 @@ module mkVJmain(Empty);
 		tree_thresh_array.portA.request.put(makeRequest(False, a, 0));
 	endrule
 	   
-	rule getclassifiers (wc_counter<n_wc && classifier_enable&&(!init)&& !(lbuffer_enable||wbuffer_enable||buffer_enable||stage_enable ||enable_enable));
+	rule getclassifiers( readData_enable && (cascade_enable) );
 		
 		let a1<- weights_array0.portA.response.get;
 		reg_weights[0]<=a1;
@@ -371,7 +460,7 @@ module mkVJmain(Empty);
 		tree_thresh <=a18;
 	endrule	
 
-	rule wc_compute(wc_counter<=n_wc && (!init)&& !(lbuffer_enable||wbuffer_enable||buffer_enable||stage_enable||enable_enable ));
+	rule wc_compute( classifier_enable && (cascade_enable) );
 		 let x1=reg_rectangle[0];
 		 let y1=reg_rectangle[1];
 		 let w1=reg_rectangle[2];
@@ -398,61 +487,11 @@ module mkVJmain(Empty);
 			end
 	endrule
 
-	rule update_classifier(wc_counter<n_wc && classifier_enable&&(!init)&&(!stage_enable)&& !(lbuffer_enable||wbuffer_enable||buffer_enable||enable_enable ));
-		
+	rule update_classifier(updateCl_enable && (cascade_enable) );
 		r_index<=r_index+1;
-
-		if( wc_counter == (n_wc-1) )
-		begin
-			stage_enable <=True;
-			classifier_enable<=False;
-			wc_counter<=0;
-		end
-		else
-		begin 
-			wc_counter<=wc_counter+1;
-			stage_enable <=False;
-		end
 	endrule
 
-	rule update_stage (stage_enable&&(!init)&& !(lbuffer_enable||wbuffer_enable||buffer_enable||enable_enable )); 
-		if(stage_sum>stage_thresh[cur_stage]) //continue
-		begin
-
-			if( cur_stage == (n_stages-1) )
-			begin
-				stage_enable <=False;
-				classifier_enable <=False;
-				buffer_enable <=True;
-				wc_counter<=0;
-				n_wc<=stages_array[0];
-				stage_sum<=0;
-				cur_stage<=0;
-				$display("window at: %d %d",row,col);
-			end
-			else
-			begin
-				cur_stage<=cur_stage+1;
-				n_wc<=stages_array[cur_stage+1];
-				wc_counter<=0;
-				stage_sum<=0;
-				classifier_enable<=True;
-				stage_enable <= False;
-			end
-		end
-		else
-		begin //stop and read new window
-				stage_enable <=False;
-				classifier_enable <=False;
-				buffer_enable <= True;
-				wc_counter<=0;
-				stage_sum<=0;
-				cur_stage<=0;
-				n_wc<=stages_array[0];
-		end
-	endrule
-
-	rule print;
+/*	rule print;
 		for(Sizet i = 0;i<3;i = i+1)
 		begin
 			for(Sizet j = 0;j<3;j = j+1)
@@ -466,10 +505,12 @@ module mkVJmain(Empty);
 
 		$display("\n");
 	endrule
-
-	rule done(clk>52);
+*/
+	rule done(row == r );
 		$finish(0);
 	endrule
+
+
 
 endmodule
 
