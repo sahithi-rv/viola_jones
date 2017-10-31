@@ -48,7 +48,7 @@ module mkVJfsm(Empty);
 
 
 	Reg#(Bool) buffer_enable <- mkReg(True);
-	Reg#(Bool) sd_enable <- mkReg(False);
+	Reg#(Bool) updateCl_enable <- mkReg(False);
 	Reg#(Bool) getclassifier_enable <- mkReg(False);
 	Reg#(Bool) classifier_enable <- mkReg(True);
 	Reg#(Bool) compute_enable <- mkReg(False);
@@ -63,7 +63,7 @@ module mkVJfsm(Empty);
 
 	BRAM_Configure cfg_ii = defaultValue;
 	cfg_ii.memorySize = valueof(IMGR)*valueof(IMGC);
-	cfg_ii.loadFormat = tagged Binary "../mem_files/temp.mem";
+	cfg_ii.loadFormat = tagged Binary "../mem_files/oldfaces_320_240.mem";
 
 	BRAM2Port#(BitSz_20, Pixels) ii <- mkBRAM2Server(cfg_ii);
 	BRAM_Configure cfg_lbuffer = defaultValue;
@@ -242,36 +242,56 @@ module mkVJfsm(Empty);
 	endrule
 
 	rule state_S0 (curr_state == 0);
-		$display("s0 %d", clk);
+		//$display("s0 %d", clk);
     	curr_state <= 1;
    		ii_enable<=True;
    		lbuffer_enable<=False;
    		wbuffer_enable<=False;
+  		compute_enable<=False;
+   		updateCl_enable<=False;
+   		upd_stage_enable<=False;			
+   		classifier_enable<=False;
+   		getclassifier_enable<=False;		
    	endrule
      
    	rule state_S1 (curr_state == 1);
     	curr_state <= 2;
-    			$display("s1 %d", clk);
+    			//$display("s1 %d", clk);
 
    		ii_enable<=False;
    		lbuffer_enable<=True;
    		wbuffer_enable<=False;
+  		compute_enable<=False;
+   		updateCl_enable<=False;
+   		upd_stage_enable<=False;			
+   		classifier_enable<=False;
+   		getclassifier_enable<=False;	
    	endrule
     
    	rule state_S2 (curr_state == 2); 
-      			$display("s2 %d", clk);
+      			//$display("s2 %d", clk);
 
       	curr_state <= 3;
    		ii_enable<=False;
    		lbuffer_enable<=False;
    		wbuffer_enable<=True;
+  		compute_enable<=False;
+   		updateCl_enable<=False;
+   		upd_stage_enable<=False;			
+   		classifier_enable<=False;
+   		getclassifier_enable<=False;	
    	endrule
 
    	rule state_S3 (curr_state == 3  );
-   			$display("s3 %d", clk);
+   			//$display("s3 %d", clk);
    		ii_enable<=False;
    		lbuffer_enable<=False;
    		wbuffer_enable<=False;
+   		compute_enable<=False;
+   		updateCl_enable<=False;
+   		upd_stage_enable<=False;			
+   		classifier_enable<=False;
+   		getclassifier_enable<=False;	
    		if(clk>=init_time)
    		begin
    		curr_state <= 4;
@@ -284,14 +304,15 @@ module mkVJfsm(Empty);
 
    	rule state_S4 (curr_state==4);
    		//enable_print<=True;
-   		classifier_enable<=True;
-   		getclassifier_enable<=False;	
+
 		ii_enable<=False;
    		lbuffer_enable<=False;
    		wbuffer_enable<=False;
    		compute_enable<=False;
    		updateCl_enable<=False;
-
+   		upd_stage_enable<=False;			
+   		classifier_enable<=True;
+   		getclassifier_enable<=False;	
    		curr_state<=5;
    	endrule
 
@@ -303,6 +324,7 @@ module mkVJfsm(Empty);
    		wbuffer_enable<=False;
    		compute_enable<=False;
    		updateCl_enable<=False;
+   		upd_stage_enable<=False;			
 
    		curr_state<=6;	
    	endrule
@@ -315,7 +337,7 @@ module mkVJfsm(Empty);
    		wbuffer_enable<=False;
    		compute_enable<=True;
    		updateCl_enable<=False;
-
+   		upd_stage_enable<=False;			
    		curr_state<=7;	
    	endrule
 
@@ -327,12 +349,53 @@ module mkVJfsm(Empty);
    		wbuffer_enable<=False;
    		compute_enable<=False;
    		updateCl_enable<=True;
-   		curr_state<=7;	
+   		upd_stage_enable<=False;			
+   		curr_state<=8;
+
    	endrule
 
+   	rule state_S8(curr_state==8);
+		if( wc_counter == (n_wc-1) )
+		begin
+   		curr_state<=9;
+   		end
+   		else begin
+   		curr_state<=4;
+   		end	
+   	endrule
+
+   	rule state_S9(curr_state==9);
+		classifier_enable<=False;
+   		getclassifier_enable<=False;
+		ii_enable<=False;
+   		lbuffer_enable<=False;
+   		wbuffer_enable<=False;
+   		compute_enable<=False;
+   		updateCl_enable<=False;  
+   		upd_stage_enable<=True;	
+   		curr_state<=10;
+   	endrule
+
+   	rule state_S10(curr_state==10);
+   	if(stage_sum>stage_thresh[cur_stage]) //continue
+		begin
+			if( cur_stage == (n_stages-1) )
+			begin 
+				curr_state<=0;
+			end
+			else
+			begin
+				curr_state<=4;
+			end
+		end
+		else
+		begin
+			curr_state<=0;
+		end
+   	endrule
 	
 	rule request_ii(ii_enable); // read values of column in line buffers
-		$display("ii %d col %d row %d ", clk,col,row);
+		//$display("ii %d col %d row %d ", clk,col,row);
 		if( col == (c-1) )
 		begin
 			col <= 0;
@@ -345,7 +408,7 @@ module mkVJfsm(Empty);
 
 		BitSz_20 a = pack(c*row + col);
 		let b = unpack(a);
-		$display("pos %d", b);
+		//$display("pos %d", b);
 		ii.portA.request.put(makeRequest20(False,a, 0 ));
 		for(Sizet_20 i = 1; i < (sz); i = i+1) // wrt to lbuffer
 		begin 
@@ -357,7 +420,7 @@ module mkVJfsm(Empty);
 	rule update_lbuffer(lbuffer_enable );
 //		$display("lbuffer %d", clk);
 		let tmp = (col-1+c)%c;
-		$display("lbuffer clk%d tmp%d",clk, tmp);
+		//$display("lbuffer clk%d tmp%d",clk, tmp);
 
 		BitSz_20 cl = pack(tmp);
 		for(Sizet_20 i = 0; i < (sz-1); i = i+1) // wrt to lbuffer
@@ -373,7 +436,7 @@ module mkVJfsm(Empty);
 	endrule
 
 	rule shift_wbuffer (wbuffer_enable);
-		$display("wbuffer clk %d", clk);
+		//$display("wbuffer clk %d", clk);
 		for(Sizet_20 i = 0; i < (sz); i = i+1) // wrt to wbuffer
 		begin 
 			for(Sizet_20 j = 0; j<(sz-1);j = j+1)
@@ -481,23 +544,52 @@ rule wc_compute(compute_enable);
 	endrule
 
 
-	rule update_classifier(updateCl_enable );
-		
-		r_index<=r_index+1;
+rule update_classifier(updateCl_enable );
+	
+	r_index<=r_index+1;
 
-		if( wc_counter == (n_wc-1) )
+	if( wc_counter == (n_wc-1) )
+	begin
+		wc_counter<=0;
+	end
+	else
+	begin 
+		wc_counter<=wc_counter+1;
+	end
+endrule
+
+
+
+	rule update_stage (upd_stage_enable); //continue
+		if(stage_sum>stage_thresh[cur_stage]) //continue
 		begin
-			stage_enable <=True;
-			classifier_enable<=False;
-			wc_counter<=0;
+			if( cur_stage == (n_stages-1) )
+			begin
+				
+			//	wc_counter<=0;
+				n_wc<=stages_array[0];
+				stage_sum<=0;
+				cur_stage<=0;
+				$display("window at: %d %d",row,col);
+			end
+			else
+			begin
+				cur_stage<=cur_stage+1;
+				n_wc<=stages_array[cur_stage+1];
+			//	wc_counter<=0;
+				stage_sum<=0;
+				
+			end
 		end
 		else
-		begin 
-			wc_counter<=wc_counter+1;
-			stage_enable <=False;
+		begin //stop and read new window
+			//	wc_counter<=0;
+				stage_sum<=0;
+				cur_stage<=0;
+				n_wc<=stages_array[0];
 		end
 	endrule
-
+/*
 	rule print(enable_print);
 		for(Sizet i = 0;i<3;i = i+1)
 		begin
@@ -512,7 +604,7 @@ rule wc_compute(compute_enable);
 
 		$display("\n");
 	endrule
-
+*/
 	rule done(clk>=100 );
 		$finish(0);
 	endrule
