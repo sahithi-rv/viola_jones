@@ -8,10 +8,11 @@ img1 = Image.open(image1).convert('L');
 
 arr1 = np.asarray(img1);
 
+
 #arr1 = np.array([[1, 1, 1],[1,1,1],[1,1,1]])
 
 out = []
-
+bits = 32
 
 R = arr1.shape[0]
 C = arr1.shape[1]
@@ -30,7 +31,7 @@ for i in range(1,R):
 for i in range(0,R):
 	for j in range(0,C):
 		num = ii[i][j]
-		k = format(num if num >= 0 else (1 << bits) + num, '016b')
+		k = format(num if num >= 0 else (1 << bits) + num, '032b')
 		out.append(k)
 
 fd = open(fileout,'w')

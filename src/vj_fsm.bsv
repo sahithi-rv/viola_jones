@@ -294,11 +294,11 @@ module mkVJfsm(Empty);
    		getclassifier_enable<=False;	
    		if(clk>=init_time)
    		begin
-   		curr_state <= 4;
+   			curr_state <= 4;
    		end
    		else
    		begin
-   		curr_state<=0;
+   			curr_state<=0;
    		end
    	endrule
 
@@ -357,10 +357,10 @@ module mkVJfsm(Empty);
    	rule state_S8(curr_state==8);
 		if( wc_counter == (n_wc-1) )
 		begin
-   		curr_state<=9;
+   			curr_state<=9;
    		end
    		else begin
-   		curr_state<=4;
+   			curr_state<=4;
    		end	
    	endrule
 
@@ -516,7 +516,7 @@ module mkVJfsm(Empty);
 		tree_thresh <=a18;
 	endrule	
 
-rule wc_compute(compute_enable);
+rule wc_compute(compute_enable && !(upd_stage_enable));
 		 let x1=reg_rectangle[0];
 		 let y1=reg_rectangle[1];
 		 let w1=reg_rectangle[2];
@@ -560,7 +560,7 @@ endrule
 
 
 
-	rule update_stage (upd_stage_enable); //continue
+	rule update_stage (upd_stage_enable && !(compute_enable)); //continue
 		if(stage_sum>stage_thresh[cur_stage]) //continue
 		begin
 			if( cur_stage == (n_stages-1) )

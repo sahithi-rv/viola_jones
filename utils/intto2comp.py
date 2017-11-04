@@ -13,8 +13,8 @@ l = s.split(',');
 
 for item in l:
 	num = int(item.strip())
-	bits = 16
-	k = format(num if num >= 0 else (1 << bits) + num, '016b')
+	bits = 32
+	k = format(num if num >= 0 else (1 << bits) + num, '032b')
 	out.append(k)
 
 fd = open(fileout,'w')
