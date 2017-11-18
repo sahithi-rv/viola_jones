@@ -5,6 +5,7 @@ import Vector :: * ;
 import StmtFSM :: *;
 
 
+
 function BRAMRequest#(BitSz, Pixels) makeRequest(Bool write, Bit#(16) addr, Pixels data);
 	return BRAMRequest{
 		write: write,
@@ -53,6 +54,8 @@ module mkVJfsm(Empty);
 	Reg#(Bool) upd_stage_enable <- mkReg(False);
 
 	Reg#(Data_32) stage_sum <- mkReg(0);
+	Reg#(Data_32) stddev <- mkReg(0);
+	Reg#(Data_32) norm_thresh <- mkReg(0);
 	Reg#(Data_32) classifier_sum <- mkReg(0);
 	Reg#(BitSz) r_index <- mkReg(0);
 	Reg#(Data_32) cur_stage <- mkReg(0);
@@ -63,6 +66,10 @@ module mkVJfsm(Empty);
 	cfg_ii.memorySize = valueof(IMGR)*valueof(IMGC);
 	cfg_ii.loadFormat = tagged Binary "../mem_files/img_scaled3_ii.mem";
 
+	BRAM_Configure cfg_sqii = defaultValue;
+	cfg_sqii.memorySize = valueof(IMGR)*valueof(IMGC);
+	cfg_sqii.loadFormat = tagged Binary "../mem_files/img_scaled3_sqii.mem";
+
 	BRAM2Port#(BitSz_20, Pixels) ii <- mkBRAM2Server(cfg_ii);
 	BRAM_Configure cfg_lbuffer = defaultValue;
 	cfg_lbuffer.memorySize = valueof(IMGC);
@@ -70,6 +77,16 @@ module mkVJfsm(Empty);
 	Vector#(WSZ,  BRAM2Port#(BitSz_20, Pixels) ) lbuffer <- replicateM(mkBRAM2Server(cfg_lbuffer)) ; // size = 20*240
 	Vector#(WSZ, Vector#(WSZ, Reg#(Pixels) )) wbuffer <- replicateM(replicateM(mkReg(0))); // size = 20*20
 	Vector#(WSZ,  Reg#(Pixels)) tempRegs <- replicateM(mkReg(0));
+
+
+	BRAM2Port#(BitSz_20, Pixels) sqii <- mkBRAM2Server(cfg_sqii);
+	BRAM_Configure cfg_sqlbuffer = defaultValue;
+	cfg_sqlbuffer.memorySize = valueof(IMGC);
+
+/*	Vector#(WSZ,  BRAM2Port#(BitSz_20, Pixels) ) sqlbuffer <- replicateM(mkBRAM2Server(cfg_sqlbuffer)) ; // size = 20*240
+	Vector#(WSZ, Vector#(WSZ, Reg#(Pixels) )) sqwbuffer <- replicateM(replicateM(mkReg(0))); // size = 20*20
+*/	Vector#(4,  Reg#(Pixels)) sqtempRegs <- replicateM(mkReg(0));
+
 	Vector#( TAdd#(STAGES,1), Reg#(Data_32)) stages_array <- replicateM(mkReg(0));
 	Vector#( STAGES, Reg#(Data_32)) stage_thresh  <- replicateM(mkReg(0));
 	
@@ -81,9 +98,8 @@ module mkVJfsm(Empty);
 	Reg#(Sizet) curr_state <- mkReg(0);
 
 		// initialize registers
-
 	rule init_regs(init);
-	//	n_wc <= 9;
+	
 		stages_array[0] <= 9;
 		stages_array[1] <= 16;
 		stages_array[2] <= 27;
@@ -135,8 +151,34 @@ module mkVJfsm(Empty);
 		stage_thresh[22] <=-334;
 		stage_thresh[23] <=-345;
 		stage_thresh[24] <= -307;
-		
+	
 
+/*		stage_thresh[0] <= -1290;
+		stage_thresh[1] <= -1275;
+		stage_thresh[2] <= -1191;
+		stage_thresh[3] <= -1140;
+		stage_thresh[4] <= -1122;
+		stage_thresh[5] <= -1057;
+		stage_thresh[6] <= -1029;
+		stage_thresh[7] <= -994;
+		stage_thresh[8] <= -983;
+		stage_thresh[9] <= -933;
+		stage_thresh[10] <=-990;
+		stage_thresh[11] <=-951;
+		stage_thresh[12] <=-912;
+		stage_thresh[13] <=-947;
+		stage_thresh[14] <=-877;
+		stage_thresh[15] <=-899;
+		stage_thresh[16] <=-920;
+		stage_thresh[17] <=-868;
+		stage_thresh[18] <=-829;
+		stage_thresh[19] <=-821;
+		stage_thresh[20] <=-839;
+		stage_thresh[21] <=-849;
+		stage_thresh[22] <=-833;
+		stage_thresh[23] <=-862;
+		stage_thresh[24] <=-766;	
+*/
 		init <= False;
 	endrule
 
@@ -249,7 +291,6 @@ module mkVJfsm(Empty);
 
 		BitSz_20 a = pack(c*row + col);
 		let b = unpack(a);
-		//// $display("pos %d", b);
 		ii.portA.request.put(makeRequest20(False,a, 0 ));
 		for(Sizet_20 i = 1; i < (sz); i = i+1) // wrt to lbuffer
 		begin 
@@ -263,7 +304,7 @@ module mkVJfsm(Empty);
 	rule update_lbuffer(curr_state==1);
 		//// $display("lbuffer %d", clk);
 		let tmp = (col-1+c)%c;
-		 $display("lbuffer clk %d %d",clk, tmp);
+		// $display("lbuffer clk %d %d",clk, tmp);
 
 		BitSz_20 cl = pack(tmp);
 		for(Sizet_20 i = 0; i < (sz-1); i = i+1) // wrt to lbuffer
@@ -275,18 +316,19 @@ module mkVJfsm(Empty);
 		let a <- ii.portA.response.get;
 		lbuffer[sz-1].portB.request.put(makeRequest20(True, cl, a));
 		tempRegs[sz-1] <= a;
-		let b = unpack(a);	
+			
 
 		curr_state <= 3;	
 	endrule
 
 	rule shift_wbuffer (curr_state==3);
-		$display("wbuffer clk %d %d", clk, init_time);
+		//$display("wbuffer clk %d %d", clk, init_time);
 		for(Sizet_20 i = 0; i < (sz); i = i+1) // wrt to wbuffer
 		begin 
 			for(Sizet_20 j = 0; j<(sz-1);j = j+1)
 			begin
 				wbuffer[i][j] <= wbuffer[i][j+1];
+	//			sqwbuffer[i][j] <= sqwbuffer[i][j+1];
 			end
 		end
 
@@ -294,11 +336,12 @@ module mkVJfsm(Empty);
 		begin
 		
 			wbuffer[i][sz-1] <= tempRegs[i];
+	//		sqwbuffer[i][sz-1] <= sqtempRegs[i];
 		end
 
-		if(clk>=init_time)
+		if(clk>=init_time && row>=(sz-1) && col>=(sz-1))
    		begin
-   			curr_state <= 4;
+   			curr_state <= 520;
    		end
    		else
    		begin
@@ -306,10 +349,150 @@ module mkVJfsm(Empty);
    		end
 	endrule
 
+	rule loadsq1 (curr_state==520);
+		let a= pack(c*row + col);		
+		sqii.portA.request.put(makeRequest20(False, a, 0));
+		curr_state<=521;	
+	endrule
+
+	rule getsq1 (curr_state==521);
+		let a1<- sqii.portA.response.get;
+		sqtempRegs[0]<=a1;
+		curr_state<=522;
+	endrule
+
+	rule loadsq2 (curr_state==522);
+		let a= pack(c*row + col+sz-1);		
+		sqii.portA.request.put(makeRequest20(False, a, 0));
+		curr_state<=523;	
+	endrule
+
+	rule getsq2 (curr_state==523);
+		let a1<- sqii.portA.response.get;
+		sqtempRegs[1]<=a1;
+		curr_state<=524;
+	endrule
+
+	rule loadsq3 (curr_state==524);
+		let a= pack(c*(row+sz-1) + col);		
+		sqii.portA.request.put(makeRequest20(False, a, 0));
+		curr_state<=525;	
+	endrule
+
+	rule getsq3 (curr_state==525);
+		let a1<- sqii.portA.response.get;
+		sqtempRegs[2]<=a1;
+		curr_state<=526;
+	endrule
+
+	rule loadsq4 (curr_state==526);
+		let a= pack(c*(row+sz-1) + col+sz-1);		
+		sqii.portA.request.put(makeRequest20(False, a, 0));
+		curr_state<=527;	
+	endrule
+
+	rule getsq4 (curr_state==527);
+		let a1<- sqii.portA.response.get;
+		sqtempRegs[3]<=a1;
+		curr_state<=52;
+	endrule
+
+	Reg#(Data_32) result_reg <- mkReg(0);
+	Reg#(Data_32) reg_sq <- mkReg(0);
+	Reg#(Data_32) reg_sqrt <- mkReg(0);
+	Reg#(Data_32) reg_ans <- mkReg(0);
+	Reg#(Data_32) reg_i <- mkReg(0);
+
+
+	rule compute_stddev(curr_state == 52);		
+		Data_32 x = 0;
+		Data_32 y = 0;
+		Data_32 w = fromInteger(valueof(WSZ))-1;
+		Data_32 h = fromInteger(valueof(WSZ))-1;
+
+		Data_32 tstddev = unpack(sqtempRegs[0]) - unpack(sqtempRegs[1]) - unpack(sqtempRegs[2]) + unpack(sqtempRegs[3]);
+
+		Data_32 mean = unpack(wbuffer[y][x]) - unpack(wbuffer[y+h][x]) - unpack(wbuffer[y][x+w]) + unpack(wbuffer[y+h][w+x]);
+
+		let stddev1 = (tstddev*(w)*(h));
+  		let stddev2 =  stddev1 - mean*mean; 
+  		reg_sq <= stddev2;
+  		let stddev3 = 1;
+  		if( stddev2 > 0 )
+		begin
+		     curr_state<=5200;
+		end
+		else
+		begin
+		    stddev <= 1;
+		    curr_state <= 4;
+		end
+
+		
+
+	endrule
+
+	/*************** sqrt statemachine *******************/
+
+
+
+	rule init_sqrt(curr_state == 5200);
+
+		if( reg_sq == 0 )
+		begin
+			
+			stddev <= 0;
+			curr_state <= 4;
+		end
+		else
+		begin
+			if( reg_sq == 1 )
+			begin
+				stddev <= 1;
+				curr_state <= 4;
+			end
+			else
+			begin
+				result_reg <= 1;
+				reg_ans <= 0;
+				reg_i <= 1;
+				curr_state <= 5201;
+			end
+		end
+	endrule
+
+	rule while_sqrt( curr_state == 5201);
+		let a = reg_i;
+		reg_ans <= a;
+		reg_i <= a + 1;
+		result_reg <=  (a+1)*(a+1);
+		curr_state <= 5202;
+
+	endrule
+
+	rule check_sqrt( curr_state == 5202 );
+		if( result_reg < reg_sq )
+		begin
+			curr_state <= 5201;
+		end
+		else 
+			if( result_reg == reg_sq)
+			begin
+				stddev <= reg_i;
+				curr_state <= 4;
+			end
+			else
+			begin
+				stddev <= reg_ans;
+				curr_state <= 4;
+			end
+
+	endrule
+
 
 	rule loadclassifiers (curr_state==4);
 		let a=pack(r_index);
-		 $display("loadclassifiers %d", clk);
+		// $display("loadclassifiers %d", clk);
 		weights_array0.portA.request.put(makeRequest(False, a, 0));
 		weights_array1.portA.request.put(makeRequest(False, a, 0));
 		weights_array2.portA.request.put(makeRequest(False, a, 0));
@@ -334,7 +517,7 @@ module mkVJfsm(Empty);
 	
 
 	rule getclassifiers (curr_state==5);
-		 $display("getclassifiers clk %d", clk);
+		// $display("getclassifiers clk %d", clk);
 		let a1<- weights_array0.portA.response.get;
 		reg_weights[0]<=a1;
 		let a2<- weights_array1.portA.response.get;
@@ -377,7 +560,6 @@ module mkVJfsm(Empty);
 
 	rule wc_compute(curr_state==6 );
 		 let x1=unpack(reg_rectangle[0]);
-		  $display("wc_compute clk %d", clk);
 		 let y1=unpack(reg_rectangle[1]);
 		 let w1=unpack(reg_rectangle[2]);
 		 let h1=unpack(reg_rectangle[3]);
@@ -393,7 +575,8 @@ module mkVJfsm(Empty);
 		 let h3=unpack(reg_rectangle[11]);
 		 let rect3=unpack(wbuffer[y3][x3])-unpack(wbuffer[y3+h3][x3])-unpack(wbuffer[y3][x3+w3])+unpack(wbuffer[y3+h3][x3+w3]);
 		 let classifier_sum=rect1*unpack(reg_weights[0])+rect2*unpack(reg_weights[1])+rect3*unpack(reg_weights[2]);
-		if(classifier_sum>=tree_thresh)
+
+		if(classifier_sum>=(tree_thresh*stddev) )
 			begin
 				stage_sum<=stage_sum+unpack(reg_alpha[1]);
 			end
@@ -406,27 +589,29 @@ module mkVJfsm(Empty);
 	endrule
 
    	rule state_S7(curr_state==7);
-   		 $display("s7 %d %d %d", clk, wc_counter, n_wc);
+   		// $display("s7 %d %d %d", clk, wc_counter, n_wc);
    					
 		if( wc_counter == (n_wc-1) )
 		begin
 			wc_counter<=0;
    			curr_state<=10;
-   			$display("call update stage");
+   			r_index<=r_index+1;
+   		//	$display("call update stage");
    		end
    		else begin
    			wc_counter<=wc_counter+1;
-   			$display("new HF");
+   			//$display("new HF");
    			curr_state<=4;
+   			r_index<=r_index+1;
    		end	
 
-   		r_index<=r_index+1;
+   		
    	endrule
 
 
 
    	rule state_S10(curr_state==10);
-		 $display("update stage %d", clk);
+	//	 $display("update stage %d", clk);
  			
    		// $display("s10 %d %d %d", clk, cur_stage, n_stages);
    		if(stage_sum>stage_thresh[cur_stage]) //continue
@@ -439,8 +624,9 @@ module mkVJfsm(Empty);
 				stage_sum<=0;
 				cur_stage<=0;
 				 $display("window at: %d %d",row,col);
-
+				 r_index<=0;
 				 $display("face detected, get new window");
+				 $finish(0);
 			end
 			else
 			begin
@@ -451,7 +637,7 @@ module mkVJfsm(Empty);
 				wc_counter<=0;
 				stage_sum<=0;
 
-				$display("stage %d done, next stage", cur_stage);
+			//	$display("stage %d done, next stage", cur_stage);
 			end
 		end
 		else
@@ -463,7 +649,7 @@ module mkVJfsm(Empty);
 			stage_sum<=0;
 			cur_stage<=0;
 			n_wc<=stages_array[0];
-
+			r_index<=0;
 			$display("no face detected, get new window");
 		end		
    	endrule

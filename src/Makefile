@@ -12,10 +12,15 @@ BSC=bsc
 #vj:  
 #	$(BSC)  -sim  -u -g  mkVJmain  -show-schedule -cpp  vj_main.bsv
 #	$(BSC) -Xc++ -I$(INCL) -sim  -e  mkVJmain  -o vj  *.ba image-utilities.cpp
+trial: TrialFixedPoint.bsv
+	@echo "Compiling into verilog files"
+	bsc -verilog -u TrialFixedPoint.bsv
+	@echo "Generting the simulation object"
+	bsc -verilog -e mkTrialFixedPoint -o TrialFixedPoint.bsim
 
 vj_main: 
 	@echo "Compiling into verilog files"
-	bsc -verilog -u vj_main.bsv +RTS -K0.1G -RTS
+	bsc -verilog -u vj_main.bsv +RTS -k1G1G -RTS
 	@echo "Generting the simulation object"
 	bsc -verilog -e mkVJmain -o vj_main.bsim +RTS -k0.1G -RTS
 
@@ -23,7 +28,7 @@ vj_fsm:
 	@echo "Compiling into verilog files"
 	bsc -verilog -u vj_fsm.bsv +RTS -K0.1G -RTS
 	@echo "Generting the simulation object"
-	bsc -verilog -e mkVJfsm -o vj_fsm.bsim +RTS -k0.1G -RTS
+	bsc -verilog -e mkVJfsm -o vj_fsm34.bsim +RTS -k0.1G -RTS
 	
 
 # -----------------------------------------------------------------
