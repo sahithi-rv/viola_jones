@@ -35,7 +35,7 @@ Integer hf = valueof(HF);
 module mkVJfsm(Empty);
 	Reg#(Data_32) clk <- mkReg(0);
 
-	Reg#(Sizet_20) row <- mkReg(0);
+	Reg#(Sizet_20) row <- mkReg(50);
 	Reg#(Sizet_20) col <- mkReg(0);
 	Reg#(Bool) wbuffer_enable <- mkReg(False);
 	Reg#(Bool) lbuffer_enable <- mkReg(False);
@@ -278,8 +278,8 @@ module mkVJfsm(Empty);
 
 
 	rule request_ii(curr_state==0 && !(init)); // read values of column in line buffers
-		$display("ii %d %d %d ", clk,row, col);
-		if( col == (c-1) )
+	//	$display("ii %d %d %d ", clk,row, col);
+		if( col == (c-1))
 		begin
 			col <= 0;
 			row <= row +1;
@@ -350,7 +350,8 @@ module mkVJfsm(Empty);
 	endrule
 
 	rule loadsq1 (curr_state==520);
-		let a= pack(c*row + col);		
+		//let a= pack(c*row + col);
+		let a= pack(c*(row-sz+1) + col-sz);		
 		sqii.portA.request.put(makeRequest20(False, a, 0));
 		curr_state<=521;	
 	endrule
@@ -362,7 +363,8 @@ module mkVJfsm(Empty);
 	endrule
 
 	rule loadsq2 (curr_state==522);
-		let a= pack(c*row + col+sz-1);		
+		//let a= pack(c*row + col+sz-1);		
+		let a= pack(c*(row-sz+1) + col-1);		
 		sqii.portA.request.put(makeRequest20(False, a, 0));
 		curr_state<=523;	
 	endrule
@@ -374,7 +376,8 @@ module mkVJfsm(Empty);
 	endrule
 
 	rule loadsq3 (curr_state==524);
-		let a= pack(c*(row+sz-1) + col);		
+//		let a= pack(c*(row+sz-1) + col);		
+		let a= pack(c*row + col-sz);		
 		sqii.portA.request.put(makeRequest20(False, a, 0));
 		curr_state<=525;	
 	endrule
@@ -386,7 +389,7 @@ module mkVJfsm(Empty);
 	endrule
 
 	rule loadsq4 (curr_state==526);
-		let a= pack(c*(row+sz-1) + col+sz-1);		
+		let a= pack(c*(row) + col-1);		
 		sqii.portA.request.put(makeRequest20(False, a, 0));
 		curr_state<=527;	
 	endrule
@@ -414,6 +417,7 @@ module mkVJfsm(Empty);
 
 		Data_32 mean = unpack(wbuffer[y][x]) - unpack(wbuffer[y+h][x]) - unpack(wbuffer[y][x+w]) + unpack(wbuffer[y+h][w+x]);
 
+	//	$display("tstddev: %d,mean: %d",tstddev,mean);
 		let stddev1 = (tstddev*(w)*(h));
   		let stddev2 =  stddev1 - mean*mean; 
   		reg_sq <= stddev2;
@@ -575,7 +579,7 @@ module mkVJfsm(Empty);
 		 let h3=unpack(reg_rectangle[11]);
 		 let rect3=unpack(wbuffer[y3][x3])-unpack(wbuffer[y3+h3][x3])-unpack(wbuffer[y3][x3+w3])+unpack(wbuffer[y3+h3][x3+w3]);
 		 let classifier_sum=rect1*unpack(reg_weights[0])+rect2*unpack(reg_weights[1])+rect3*unpack(reg_weights[2]);
-
+	//	 $display("r_index: %d, classifier sum: %d, stddev: %d", r_index, classifier_sum,stddev);
 		if(classifier_sum>=(tree_thresh*stddev) )
 			begin
 				stage_sum<=stage_sum+unpack(reg_alpha[1]);
@@ -613,19 +617,19 @@ module mkVJfsm(Empty);
    	rule state_S10(curr_state==10);
 	//	 $display("update stage %d", clk);
  			
-   		// $display("s10 %d %d %d", clk, cur_stage, n_stages);
+   		//$display("stage sum:%d, cur_stage:%d",stage_sum,cur_stage);
+   		//$display("cur_stage:%d",cur_stage);
    		if(stage_sum>stage_thresh[cur_stage]) //continue
 		begin
 			if( cur_stage == (n_stages-1) )
 			begin 
 				curr_state<=0;
-
 				n_wc<=stages_array[0];
 				stage_sum<=0;
 				cur_stage<=0;
 				 $display("window at: %d %d",row,col);
 				 r_index<=0;
-				 $display("face detected, get new window");
+			//	 $display("face detected, get new window");
 				 $finish(0);
 			end
 			else
@@ -645,12 +649,12 @@ module mkVJfsm(Empty);
 			curr_state<=0;
 
 			wc_counter<=0;
-			//$display(" stop and read new window");
+		//	$display(" stop and read new window");
 			stage_sum<=0;
 			cur_stage<=0;
 			n_wc<=stages_array[0];
 			r_index<=0;
-			$display("no face detected, get new window");
+		//	$display("no face detected, get new window");
 		end		
    	endrule
 
