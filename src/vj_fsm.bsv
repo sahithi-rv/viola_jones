@@ -1,4 +1,6 @@
 package vj_fsm;
+
+import IFC::*;
 import BRAM::*;
 import constants::*;
 import Vector :: * ;
@@ -32,7 +34,7 @@ Data_32 n_stages=fromInteger(valueof(STAGES));
 
 Integer hf = valueof(HF);
 (*synthesize*)
-module mkVJfsm(Empty);
+module mkVjfsm( VJ_ifc );
 	Reg#(Data_32) clk <- mkReg(0);
 
 	Reg#(Sizet_20) row <- mkReg(50);
@@ -45,6 +47,8 @@ module mkVJfsm(Empty);
 	Reg#(Bool) cascade_enable <- mkReg(False);
 
 	Reg#(Bool) init <- mkReg(True);
+	Reg#(Bool) flag <- mkReg(True);
+	Reg#(Bool) done_flag <- mkReg(False);
 
 
 	Reg#(Bool) updateCl_enable <- mkReg(False);
@@ -64,11 +68,11 @@ module mkVJfsm(Empty);
 
 	BRAM_Configure cfg_ii = defaultValue;
 	cfg_ii.memorySize = valueof(IMGR)*valueof(IMGC);
-	cfg_ii.loadFormat = tagged Binary "../mem_files/img_scaled3_ii.mem";
+	cfg_ii.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/img_scaled3_ii.mem";
 
 	BRAM_Configure cfg_sqii = defaultValue;
 	cfg_sqii.memorySize = valueof(IMGR)*valueof(IMGC);
-	cfg_sqii.loadFormat = tagged Binary "../mem_files/img_scaled3_sqii.mem";
+	cfg_sqii.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/img_scaled3_sqii.mem";
 
 	BRAM2Port#(BitSz_20, Pixels) ii <- mkBRAM2Server(cfg_ii);
 	BRAM_Configure cfg_lbuffer = defaultValue;
@@ -184,92 +188,92 @@ module mkVJfsm(Empty);
 
 	BRAM_Configure cfg_weights_array0 = defaultValue;
 	cfg_weights_array0.memorySize = hf;
-	cfg_weights_array0.loadFormat = tagged Binary "../mem_files/weights_array0.txt.mem";
+	cfg_weights_array0.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/weights_array0.txt.mem";
 	BRAM2Port#(BitSz, Pixels) weights_array0 <- mkBRAM2Server(cfg_weights_array0);
 
 	BRAM_Configure cfg_weights_array1 = defaultValue;
 	cfg_weights_array1.memorySize = hf;
-	cfg_weights_array1.loadFormat = tagged Binary "../mem_files/weights_array1.txt.mem";
+	cfg_weights_array1.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/weights_array1.txt.mem";
 	BRAM2Port#(BitSz, Pixels) weights_array1 <- mkBRAM2Server(cfg_weights_array1);
 
 	BRAM_Configure cfg_weights_array2 = defaultValue;
 	cfg_weights_array2.memorySize = hf;
-	cfg_weights_array2.loadFormat = tagged Binary "../mem_files/weights_array2.txt.mem";
+	cfg_weights_array2.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/weights_array2.txt.mem";
 	BRAM2Port#(BitSz, Pixels) weights_array2 <- mkBRAM2Server(cfg_weights_array2);
 
 	BRAM_Configure cfg_tree_thresh_array = defaultValue;
 	cfg_tree_thresh_array.memorySize = hf;
-	cfg_tree_thresh_array.loadFormat = tagged Binary "../mem_files/tree_thresh_array.txt.mem";
+	cfg_tree_thresh_array.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/tree_thresh_array.txt.mem";
 	BRAM2Port#(BitSz, Pixels) tree_thresh_array <- mkBRAM2Server(cfg_tree_thresh_array);
 
 	BRAM_Configure cfg_alpha1 = defaultValue;
 	cfg_alpha1.memorySize = hf;
-	cfg_alpha1.loadFormat = tagged Binary "../mem_files/alpha1_array.txt.mem";
+	cfg_alpha1.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/alpha1_array.txt.mem";
 	BRAM2Port#(BitSz, Pixels) alpha1 <- mkBRAM2Server(cfg_alpha1);
 
 	BRAM_Configure cfg_alpha2 = defaultValue;
 	cfg_alpha2.memorySize = hf;
-	cfg_alpha2.loadFormat = tagged Binary "../mem_files/alpha2_array.txt.mem";
+	cfg_alpha2.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/alpha2_array.txt.mem";
 	BRAM2Port#(BitSz, Pixels) alpha2 <- mkBRAM2Server(cfg_alpha2);
 
 	BRAM_Configure cfg_rectangles0 = defaultValue;
 	cfg_rectangles0.memorySize = hf;
-	cfg_rectangles0.loadFormat = tagged Binary "../mem_files/rectangles_array0.txt.mem";
+	cfg_rectangles0.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array0.txt.mem";
 	BRAM2Port#(BitSz, Pixels) rectangles0 <- mkBRAM2Server(cfg_rectangles0);
 
 	BRAM_Configure cfg_rectangles1 = defaultValue;
 	cfg_rectangles1.memorySize = hf;
-	cfg_rectangles1.loadFormat = tagged Binary "../mem_files/rectangles_array1.txt.mem";
+	cfg_rectangles1.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array1.txt.mem";
 	BRAM2Port#(BitSz, Pixels) rectangles1 <- mkBRAM2Server(cfg_rectangles1);
 
 	BRAM_Configure cfg_rectangles2 = defaultValue;
 	cfg_rectangles2.memorySize = hf;
-	cfg_rectangles2.loadFormat = tagged Binary "../mem_files/rectangles_array2.txt.mem";
+	cfg_rectangles2.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array2.txt.mem";
 	BRAM2Port#(BitSz, Pixels) rectangles2 <- mkBRAM2Server(cfg_rectangles2);
 
 	BRAM_Configure cfg_rectangles3 = defaultValue;
 	cfg_rectangles3.memorySize = hf;
-	cfg_rectangles3.loadFormat = tagged Binary "../mem_files/rectangles_array3.txt.mem";
+	cfg_rectangles3.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array3.txt.mem";
 	BRAM2Port#(BitSz, Pixels) rectangles3 <- mkBRAM2Server(cfg_rectangles3);
 
 	BRAM_Configure cfg_rectangles4 = defaultValue;
 	cfg_rectangles4.memorySize = hf;
-	cfg_rectangles4.loadFormat = tagged Binary "../mem_files/rectangles_array4.txt.mem";
+	cfg_rectangles4.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array4.txt.mem";
 	BRAM2Port#(BitSz, Pixels) rectangles4 <- mkBRAM2Server(cfg_rectangles4);
 
 	BRAM_Configure cfg_rectangles5 = defaultValue;
 	cfg_rectangles5.memorySize = hf;
-	cfg_rectangles5.loadFormat = tagged Binary "../mem_files/rectangles_array5.txt.mem";
+	cfg_rectangles5.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array5.txt.mem";
 	BRAM2Port#(BitSz, Pixels) rectangles5 <- mkBRAM2Server(cfg_rectangles5);
 
 	BRAM_Configure cfg_rectangles6 = defaultValue;
 	cfg_rectangles6.memorySize = hf;
-	cfg_rectangles6.loadFormat = tagged Binary "../mem_files/rectangles_array6.txt.mem";	
+	cfg_rectangles6.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array6.txt.mem";	
 	BRAM2Port#(BitSz, Pixels) rectangles6 <- mkBRAM2Server(cfg_rectangles6);
 
 	BRAM_Configure cfg_rectangles7 = defaultValue;
 	cfg_rectangles7.memorySize = hf;
-	cfg_rectangles7.loadFormat = tagged Binary "../mem_files/rectangles_array7.txt.mem";			
+	cfg_rectangles7.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array7.txt.mem";			
 	BRAM2Port#(BitSz, Pixels) rectangles7 <- mkBRAM2Server(cfg_rectangles7);
 
 	BRAM_Configure cfg_rectangles8 = defaultValue;
 	cfg_rectangles8.memorySize = hf;
-	cfg_rectangles8.loadFormat = tagged Binary "../mem_files/rectangles_array8.txt.mem";
+	cfg_rectangles8.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array8.txt.mem";
 	BRAM2Port#(BitSz, Pixels) rectangles8 <- mkBRAM2Server(cfg_rectangles8);
 
 	BRAM_Configure cfg_rectangles9 = defaultValue;
 	cfg_rectangles9.memorySize = hf;
-	cfg_rectangles9.loadFormat = tagged Binary "../mem_files/rectangles_array9.txt.mem";
+	cfg_rectangles9.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array9.txt.mem";
 	BRAM2Port#(BitSz, Pixels) rectangles9 <- mkBRAM2Server(cfg_rectangles9);
 
 	BRAM_Configure cfg_rectangles10 = defaultValue;
 	cfg_rectangles10.memorySize = hf;
-	cfg_rectangles10.loadFormat = tagged Binary "../mem_files/rectangles_array10.txt.mem";
+	cfg_rectangles10.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array10.txt.mem";
 	BRAM2Port#(BitSz, Pixels) rectangles10 <- mkBRAM2Server(cfg_rectangles10);
 
 	BRAM_Configure cfg_rectangles11 = defaultValue;
 	cfg_rectangles11.memorySize = hf;
-	cfg_rectangles11.loadFormat = tagged Binary "../mem_files/rectangles_array11.txt.mem";
+	cfg_rectangles11.loadFormat = tagged Binary "/home/sahithi_rvs/sem7/cdsd/viola_jones/mem_files/rectangles_array11.txt.mem";
 	BRAM2Port#(BitSz, Pixels) rectangles11 <- mkBRAM2Server(cfg_rectangles11);
 
 	rule update_clk;
@@ -627,10 +631,10 @@ module mkVJfsm(Empty);
 				n_wc<=stages_array[0];
 				stage_sum<=0;
 				cur_stage<=0;
-				 $display("window at: %d %d",row,col);
+			//	 $display("window at: %d %d",row,col);
 				 r_index<=0;
 			//	 $display("face detected, get new window");
-				 $finish(0);
+			//	 $finish(0);
 			end
 			else
 			begin
@@ -658,12 +662,19 @@ module mkVJfsm(Empty);
 		end		
    	endrule
 
-	rule done(row == r);
-		$finish(0);
+	rule done(row == r );
+		done_flag <= True;
 	endrule
 
-
-
+	method Action  start(Bool i) if (flag && !init);
+		init <= i;
+		flag <= False;
+	endmethod
+    
+    method Pixels  result() if (done_flag);
+    	let a = pack(stage_sum);
+    	return a;
+    endmethod
 endmodule
 
 endpackage
